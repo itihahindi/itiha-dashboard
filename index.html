@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Itiha Intel</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<meta name="robots" content="noindex, nofollow">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="dot"></span>Itiha Intel</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="brief" role="tab">Today</button>
+    <button class="tab" data-tab="goal" role="tab">Goal</button>
+    <button class="tab" data-tab="ideas" role="tab">Ideas</button>
+    <button class="tab" data-tab="videos" role="tab">Videos</button>
+    <span class="tab-sep" aria-hidden="true"></span>
+    <button class="tab minor" data-tab="overview" role="tab">Overview</button>
+    <button class="tab minor" data-tab="competitors" role="tab">Competitors</button>
+    <button class="tab minor" data-tab="audience" role="tab">Audience</button>
+    <button class="tab minor" data-tab="instagram" role="tab">Instagram</button>
+    <button class="tab minor" data-tab="intel" role="tab">Lessons</button>
+    <button class="tab minor" data-tab="research" role="tab">Research</button>
+    <button class="tab minor" data-tab="search" role="tab">Search</button>
+  </nav>
+  <div class="meta" id="meta"></div>
+  <!-- Run bar: the owner starts the server, reads, stops it. Everything else runs from here. -->
+  <div class="runbar" id="runbar">
+    <a class="goal-strip" id="goal-strip" href="#goal" hidden title="Progress to the subscriber goal. Opens the Goal tab."></a>
+    <div class="run-state" role="status" aria-live="polite">
+      <span class="run-dot" id="run-dot"></span>
+      <span id="run-text">Checking…</span>
+    </div>
+    <div class="run-actions">
+      <button type="button" class="btn" id="run-refresh" title="Sync YouTube and Instagram, run trends, reports and the pack. Takes a while; the page stays usable.">Refresh now</button>
+      <button type="button" class="btn" id="run-brief" title="Run /brief in Claude Code headless and render today's brief">Write brief now</button>
+      <label class="check" title="Write the brief automatically after each successful refresh when today's brief does not exist yet"><input type="checkbox" id="run-auto"> auto-brief</label>
+      <button type="button" class="btn ghost" id="run-log-toggle" aria-expanded="false" aria-controls="run-log">Log</button>
+      <button type="button" class="btn ghost" id="run-cancel" hidden>Cancel</button>
+      <button type="button" class="btn danger" id="run-stop" title="Stop the local server. Close the tab afterwards.">Stop server</button>
+    </div>
+    <div class="run-progress" id="run-progress" hidden><div class="run-progress-fill" id="run-progress-fill"></div></div>
+    <pre class="run-log" id="run-log" hidden></pre>
+  </div>
+</header>
+
+<main>
+  <p class="purpose" id="purpose"></p>
+
+  <!-- Brief -->
+  <section class="panel active" id="tab-brief" role="tabpanel" aria-labelledby="tabbtn-brief">
+    <!-- 1. Where the goal stands, in three numbers. -->
+    <div class="today-status" id="today-status" hidden></div>
+
+    <!-- 2. What to do: the open decisions, then the small tasks. -->
+    <div class="card decisions-card" id="decisions-card" hidden>
+      <div class="card-head"><h2>Do this week</h2><span class="hint" id="decisions-meta"></span></div>
+      <ol class="decisions" id="decisions-open"></ol>
+      <div class="quick" id="quick-tasks" hidden></div>
+      <details class="reco-more" id="decisions-closed-wrap" hidden><summary id="decisions-closed-sum"></summary><ul class="decisions-closed" id="decisions-closed"></ul></details>
+    </div>
+
+    <!-- What goes out where and when: one row per platform, seven days back and two weeks ahead. -->
+    <div class="card week-card" id="week-card" hidden>
+      <div class="card-head"><h2>Publishing calendar</h2><span class="hint" id="week-meta"></span></div>
+      <div class="cal-wrap"><div class="cal" id="week-grid"></div></div>
+      <div class="cal-key"><span><i class="cdot out"></i>went out</span><span><i class="cdot due"></i>due</span><span><i class="cdot due late"></i>overdue</span></div>
+      <div class="week-two">
+        <div><div class="hsub first">Coming up</div><div id="week-next"></div></div>
+        <div><div class="hsub first">Went out, last 7 days</div><div id="week-out"></div></div>
+      </div>
+      <div id="week-undated" hidden></div>
+      <p class="vid-do" id="week-do"></p>
+      <p class="hint" id="week-ctr"></p>
+    </div>
+
+    <!-- The comments worth an answer: corrections, questions, requests, objections. -->
+    <div class="card" id="inbox-card" hidden>
+      <div class="card-head"><h2>Comments worth answering</h2><span class="hint" id="inbox-meta"></span></div>
+      <div id="inbox-list"></div>
+      <button type="button" class="btn ghost show-all" id="inbox-all" hidden></button>
+      <p class="hint comp-note">Sorted by a rule, not a reader: mark one Done if it needs no answer. For drafted replies, say /replies in Claude Code.</p>
+    </div>
+
+    <!-- Channel health as graphics: the path, the pace, the levers, this week against last. -->
+    <div class="card health" id="health-card" hidden>
+      <div class="card-head"><h2>Channel health</h2><span class="hint" id="health-meta"></span></div>
+      <div id="health-body"></div>
+    </div>
+
+    <!-- 3. What changed, in one paragraph. -->
+    <div class="card brief-card">
+      <div class="card-head"><h2 id="brief-title">What changed</h2><span class="hint" id="brief-meta"></span></div>
+      <div class="brief-notice" id="brief-notice" hidden></div>
+      <p class="today-headline" id="brief-headline"></p>
+      <p class="hint" id="brief-freshness"></p>
+    </div>
+
+    <!-- 4. The evidence, closed until wanted. -->
+    <div class="card">
+      <div class="card-head"><h2>The evidence</h2><span class="hint">today's brief by section; open what you want to check</span></div>
+      <div class="evidence" id="brief-doc"><div class="empty">Loading…</div></div>
+      <div class="unverified" id="brief-unverified" hidden></div>
+    </div>
+
+    <!-- 5. The record, for when a claim needs checking. -->
+    <details class="card fold">
+      <summary><h2>Standing findings</h2><span class="hint" id="findings-meta">claims re-checked against the data on every refresh</span></summary>
+      <div id="findings-body"><div class="empty">Loading…</div></div>
+    </details>
+    <details class="card fold">
+      <summary><h2>Past recommendations</h2><span class="hint" id="recs-meta">what the briefs said to make in the last 60 days, and what happened</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="recs-table">
+          <thead><tr><th>Date</th><th>Section</th><th>Recommendation</th><th>Format</th><th>Shipped</th><th>Outcome</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <!-- Goal: the verdict, this month, the path, what the plan asks; tables folded underneath. -->
+  <section class="panel" id="tab-goal" role="tabpanel" aria-labelledby="tabbtn-goal">
+    <div class="card lead goal-hero">
+      <div class="goal-hero-top">
+        <div class="goal-hero-main">
+          <div class="goal-label">Subscribers</div>
+          <div class="goal-big"><span id="goal-current">–</span> <span class="goal-of" id="goal-target"></span></div>
+          <div class="hint" id="goal-current-sub"></div>
+        </div>
+      </div>
+      <div class="hbanner" id="goal-verdict" hidden></div>
+      <div class="goal-bar" id="goal-bar" role="progressbar" aria-label="Progress to the subscriber goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="goal-bar-fill" id="goal-bar-fill"></div>
+        <div class="goal-bar-mark" id="goal-bar-mark" title="Where the path says the channel should be today"></div>
+      </div>
+      <div class="goal-bar-key hint"><span><i class="fill"></i>where the channel is</span><span><i class="tick"></i>where the path says it should be today</span></div>
+      <div class="today-status goal-tiles" id="goal-hero-nums"></div>
+    </div>
+
+    <div class="card goal-month" id="goal-month">
+      <div class="card-head"><h2 id="goal-month-title">This month</h2><span class="hint" id="goal-month-meta"></span></div>
+      <div id="goal-month-body"><div class="empty">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Where this month's subscribers come from</h2><span class="hint" id="goal-levers-meta"></span></div>
+      <p class="lever-intro">The month's target, split by source. Each bar is subscribers gained so far against that source's share; the black tick is where the bar should have reached by today.</p>
+      <div class="goal-levers-grid" id="goal-levers"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>The path</h2><span class="hint">the path starts slow and steepens, because growth compounds; dots are month-end milestones</span></div>
+      <div class="seg goal-range" id="goal-range" role="group" aria-label="Chart range">
+        <button type="button" class="active" data-range="near" aria-pressed="true">Next 90 days</button>
+        <button type="button" data-range="year" aria-pressed="false">Full year</button>
+      </div>
+      <div class="chart tall" id="goal-chart"></div>
+      <p class="hint goal-ramp-note" id="goal-ramp-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What the plan asks of the channel</h2><span class="hint">each bar is what the channel has already shown it can do, against what the plan needs</span></div>
+      <div class="seg goal-plans" id="goal-plans" role="group" aria-label="Plan"></div>
+      <p class="goal-plan-desc" id="goal-plan-desc"></p>
+      <div class="goal-mix" id="goal-mix"></div>
+      <p class="goal-hardest" id="goal-hardest"></p>
+      <div class="goal-asks" id="goal-reqs"></div>
+      <div class="hsub">The next three months on this plan</div>
+      <div class="goal-next" id="goal-next"></div>
+    </div>
+
+    <details class="card fold">
+      <summary><h2>All twelve months</h2><span class="hint">what the chosen plan asks for, month by month</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="goal-months">
+          <thead><tr>
+            <th>Month</th>
+            <th class="num" title="Subscribers the path requires at month end">Milestone</th>
+            <th class="num" title="Net subscribers the month must add">Net needed</th>
+            <th class="num">Long-forms</th>
+            <th class="num" title="Views each long-form needs">Views each</th>
+            <th class="num" title="Net subscribers per 1,000 long-form views">Subs /1k</th>
+            <th class="num">Shorts</th>
+            <th class="num" title="Videos past the breakout line">Breakouts</th>
+            <th class="num" title="Community-post and channel-page subscribers a day">Community /day</th>
+            <th class="num" title="Subscribers a day from videos older than 90 days">Tail /day</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+    <details class="card fold">
+      <summary><h2>The measured numbers behind every target</h2><span class="hint">what the channel has demonstrated, breakouts so far, and how the plan counts</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="goal-demo">
+          <thead><tr><th>Measure</th><th class="num">Value</th><th>Basis</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h3 class="sub">Breakouts so far</h3>
+      <ul class="plain tech" id="goal-breakouts"></ul>
+      <ul class="goal-notes hint" id="goal-notes"></ul>
+    </details>
+  </section>
+
+  <!-- Overview: the last 90 days as trends. Long-form and Shorts side by side, never added together. -->
+  <section class="panel" id="tab-overview" role="tabpanel" aria-labelledby="tabbtn-overview">
+    <div class="card" id="ov-attention">
+      <div class="card-head"><h2>Needs a look</h2><span class="hint">automatic checks against the channel's own baselines</span></div>
+      <ul class="anomalies" id="ov-anomalies"></ul>
+    </div>
+    <div class="ov-formats" id="ov-formats"></div>
+    <div class="card">
+      <div class="card-head"><h2>Subscribers</h2><span class="hint" id="ov-subs-meta"></span></div>
+      <div id="ov-subs-summary"></div>
+      <div class="chart" id="ov-subs"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Daily views, last 90 days</h2><span class="hint">each format on its own scale; triangles mark uploads</span></div>
+      <div class="chart tall" id="ov-daily"></div>
+    </div>
+  </section>
+
+  <!-- Videos: one format at a time. Latest uploads against the usual, what converts, then curves and the full list. -->
+  <section class="panel" id="tab-videos" role="tabpanel" aria-labelledby="tabbtn-videos">
+    <div class="toolbar">
+      <div class="seg" id="vid-format">
+        <button class="active" data-format="0">Long-form</button>
+        <button data-format="1">Shorts</button>
+      </div>
+      <span class="hint" id="vid-basis"></span>
+    </div>
+    <div class="today-status" id="vid-tiles"></div>
+    <div class="card" id="vid-latest-card">
+      <div class="card-head"><h2>Latest uploads against your usual</h2><span class="hint">the big number is views as a multiple of your usual video in this format; the tick marks 1x</span></div>
+      <div class="vid-cards" id="vid-latest"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Which videos bring subscribers</h2><span class="hint">net subscribers per 1,000 views, last 90 days of analytics</span></div>
+      <div class="vid-two">
+        <div><div class="hsub first">Turning viewers into subscribers</div><div id="vid-convert"></div><p class="vid-do" id="vid-convert-do"></p></div>
+        <div><div class="hsub first">Watched, but not converting</div><div id="vid-leak"></div><p class="vid-do" id="vid-leak-do"></p></div>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="card">
+        <div class="card-head"><h2>First ten days</h2><span class="hint">views added up day by day, last 6 uploads</span></div>
+        <div class="chart tall" id="vid-launch"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>How long viewers stay</h2><span class="hint">share still watching at each point, last 6 uploads</span></div>
+        <label class="check"><input type="checkbox" id="vid-relative"> also show against similar-length YouTube videos (dashed)</label>
+        <div class="chart tall" id="vid-retention"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2 id="vid-table-title">All videos</h2><span class="hint" id="vid-count"></span></div>
+      <div class="table-wrap">
+        <table class="data" id="vid-table">
+          <thead><tr>
+            <th data-key="title">Title</th>
+            <th data-key="published_at">Published</th>
+            <th data-key="views" class="num" title="Lifetime public view count">Views</th>
+            <th data-key="outlier_score" class="num" title="Views divided by the median views of your videos in this format from the last 180 days">Against usual</th>
+            <th data-key="avg_view_pct" class="num" title="Average percentage of the video watched, 90-day analytics window">Watched</th>
+            <th data-key="subs_net" class="num" title="Subscribers gained minus lost while watching this video, 90-day analytics window">Net subs</th>
+            <th data-key="subs_per_1k" class="num" title="Net subscribers per 1,000 analytics views, 90-day window">Subs /1k</th>
+            <th data-key="engaged_pct" class="num" title="Engaged views as a percent of views, 90-day window. Since August 2026 YouTube counts Home-feed and search plays that are not engaged views, so long-form views before and after are not comparable">Engaged</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn ghost show-all" id="vid-all" hidden></button>
+    </div>
+  </section>
+
+  <!-- Competitors: who is growing, what broke out, what just went up; the chart and the full table are folded. -->
+  <section class="panel" id="tab-competitors" role="tabpanel" aria-labelledby="tabbtn-competitors">
+    <div class="today-status" id="comp-tiles"></div>
+    <div class="card">
+      <div class="card-head"><h2>Who is growing</h2><span class="hint" id="comp-growth-meta"></span></div>
+      <div class="comp-growth" id="comp-growth"></div>
+      <button type="button" class="btn ghost show-all" id="comp-growth-all" hidden></button>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>What broke out</h2><span class="hint">last 90 days; the number is views as a multiple of that channel's own usual video</span>
+        <div class="chips" id="comp-format"><button type="button" class="chip-btn active" data-format="0">Long-form</button><button type="button" class="chip-btn" data-format="1">Shorts</button></div></div>
+      <div class="vid-cards" id="comp-outliers"></div>
+      <button type="button" class="btn ghost show-all" id="comp-outliers-all" hidden></button>
+      <p class="hint comp-note">The Ideas tab turns these into video ideas for Itiha.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Just uploaded</h2><span class="hint" id="comp-upload-count"></span></div>
+      <div id="comp-uploads"></div>
+      <button type="button" class="btn ghost show-all" id="comp-uploads-all" hidden></button>
+    </div>
+    <details class="card fold" id="comp-chart-fold">
+      <summary><h2>Subscriber history</h2><span class="hint">every tracked channel since tracking began</span></summary>
+      <label class="check"><input type="checkbox" id="comp-log" checked> log scale, so small and large channels fit on one chart</label>
+      <div class="chart tall" id="comp-subs"></div>
+    </details>
+    <details class="card fold">
+      <summary><h2>All tracked channels</h2><span class="hint">latest snapshot</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="comp-table">
+          <thead><tr><th>Channel</th><th class="num">Subscribers</th><th class="num" title="Lifetime views across the whole channel">Total views</th><th class="num">Videos</th><th class="num" title="Uploads seen in the last 30 days">Uploads 30d</th><th>Last crawled</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <!-- Ideas -->
+  <section class="panel" id="tab-ideas" role="tabpanel" aria-labelledby="tabbtn-ideas">
+    <!-- 1. Open ground: the strongest outliers on subjects Itiha has never made. -->
+    <div class="card lead" id="ideas-picks-card">
+      <div class="card-head"><h2>Open ground</h2><span class="hint" id="ideas-picks-meta">what beat its own channel's normal on a subject Itiha has not made</span></div>
+      <div class="picks" id="ideas-picks"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- 2. The full lists, eight rows each until asked for more. Filters are folded. -->
+    <details class="filters" id="ideas-filters">
+      <summary>Filters <span class="hint" id="ideas-filter-sum"></span></summary>
+      <div class="toolbar ideas-toolbar">
+      <div class="seg" id="ideas-format" role="group" aria-label="Format">
+        <button class="active" data-v="both">Both lists</button><button data-v="long">Long-form</button><button data-v="short">Shorts</button>
+      </div>
+      <div class="seg" id="ideas-window" role="group" aria-label="Window">
+        <button data-v="30">30 days</button><button class="active" data-v="90">90 days</button><button data-v="365">365 days</button>
+      </div>
+      <div class="seg" id="ideas-min" role="group" aria-label="Minimum multiple">
+        <button class="active" data-v="2">2×+</button><button data-v="3">3×+</button><button data-v="5">5×+</button><button data-v="10">10×+</button>
+      </div>
+      <div class="seg" id="ideas-niche" role="group" aria-label="Niche">
+        <button class="active" data-v="history">Indian history</button><button data-v="wide">+ epics, world</button><button data-v="all">Everything</button>
+      </div>
+      <label class="check"><input type="checkbox" id="ideas-hide-made"> hide topics Itiha already made</label>
+    </div>
+    </details>
+    <p class="hint" id="ideas-summary"></p>
+    <div class="grid two">
+      <div class="card span2" id="ideas-long-card">
+        <div class="card-head"><h2>Long-form</h2><span class="hint" id="ideas-long-count"></span></div>
+        <div class="table-wrap"><table class="data ideas-table" id="ideas-long">
+          <thead><tr><th></th><th>Video</th><th class="num" title="Views divided by the median views of that channel's own long-form videos (aged 7+ days, last 365 days)">Multiple</th><th class="num">Views</th><th>Topic and hook</th><th>Itiha</th></tr></thead>
+          <tbody></tbody></table></div>
+        <button type="button" class="btn ghost show-all" id="ideas-long-all" hidden></button>
+      </div>
+      <div class="card span2" id="ideas-short-card">
+        <div class="card-head"><h2>Shorts</h2><span class="hint" id="ideas-short-count"></span></div>
+        <div class="table-wrap"><table class="data ideas-table" id="ideas-short">
+          <thead><tr><th></th><th>Video</th><th class="num" title="Views divided by the median views of that channel's own Shorts (aged 7+ days, last 365 days)">Multiple</th><th class="num">Views</th><th>Topic and hook</th><th>Itiha</th></tr></thead>
+          <tbody></tbody></table></div>
+        <button type="button" class="btn ghost show-all" id="ideas-short-all" hidden></button>
+      </div>
+      <details class="card fold span2" id="ideas-ig-card">
+        <summary><h2>Instagram reels</h2><span class="hint" id="ideas-ig-count"></span></summary>
+        <p class="ideas-ig" id="ideas-ig"></p>
+        <div class="table-wrap"><table class="data ideas-table" id="ideas-igtable">
+          <thead><tr><th>Reel</th><th class="num" title="Plays divided by the median plays of that account's last 20 non-pinned reels">Multiple</th><th class="num">Plays</th><th>Topic</th><th>Itiha</th></tr></thead>
+          <tbody></tbody></table></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Audience -->
+  <section class="panel" id="tab-audience" role="tabpanel" aria-labelledby="tabbtn-audience">
+    <div class="aud-bar">
+      <div class="chips" id="aud-format"><button type="button" class="chip-btn active" data-format="long">Long-form</button><button type="button" class="chip-btn" data-format="short">Shorts</button></div>
+      <span class="hint" id="aud-range"></span>
+    </div>
+    <div class="today-status" id="aud-tiles"></div>
+
+    <div class="card">
+      <div class="card-head"><h2>Where the views come from</h2><span class="hint" id="aud-src-meta"></span></div>
+      <div class="aud-two" id="aud-traffic"></div>
+      <button type="button" class="btn ghost show-all" id="aud-traffic-all" hidden></button>
+      <p class="vid-do" id="aud-src-do"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Who watches</h2><span class="hint">share of viewers; YouTube only knows signed-in viewers</span></div>
+      <div class="aud-who">
+        <div>
+          <div class="hsub first">Age <span class="hint"><i class="dot m"></i>men <i class="dot f"></i>women</span></div>
+          <div id="aud-demo"></div>
+        </div>
+        <div>
+          <div class="hsub first">Subscribed or not</div><div id="aud-subscribed"></div>
+          <div class="hsub">Screen</div><div id="aud-device"></div>
+          <div class="hsub">Country</div><div id="aud-geo"></div>
+        </div>
+      </div>
+      <p class="vid-do" id="aud-who-do"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What they searched to find you</h2><span class="hint" id="aud-search-meta"></span></div>
+      <div class="aud-two" id="aud-search"></div>
+      <button type="button" class="btn ghost show-all" id="aud-search-all" hidden></button>
+      <p class="hint comp-note">A search term is not demand until autocomplete agrees. A film or news name here is a spike, not a topic to build on.</p>
+    </div>
+
+    <details class="card fold" id="aud-more">
+      <summary><h2>Shared from outside, and suggested beside</h2><span class="hint" id="aud-more-meta"></span></summary>
+      <div class="aud-two wide">
+        <div><div class="hsub first">Sent from outside YouTube</div><div id="aud-external"></div></div>
+        <div><div class="hsub first">Suggested beside these videos</div><div id="aud-suggested"></div></div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Research -->
+  <section class="panel" id="tab-research" role="tabpanel" aria-labelledby="tabbtn-research">
+    <div class="research">
+      <aside class="files">
+        <label for="res-filter" class="sr-only">Filter documents</label>
+        <input type="search" id="res-filter" class="res-filter" placeholder="Filter by name or topic" autocomplete="off">
+        <div id="res-files"></div>
+      </aside>
+      <div class="res-main">
+        <div class="res-head" id="res-head" hidden>
+          <div class="res-title"><h2 id="res-title"></h2><span class="hint" id="res-sub"></span></div>
+          <label class="res-ver" id="res-ver-wrap" hidden>Version <select id="res-ver"></select></label>
+        </div>
+        <details class="res-toc" id="res-toc" hidden><summary id="res-toc-sum"></summary><div class="chips" id="res-toc-list"></div></details>
+        <article class="markdown" id="res-doc"><p class="empty">Pick a document.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Instagram -->
+  <section class="panel" id="tab-instagram" role="tabpanel" aria-labelledby="tabbtn-instagram">
+    <div class="today-status" id="ig-tiles"></div>
+
+    <div class="card" id="ig-do">
+      <div class="card-head"><h2>What to change</h2><span class="hint" id="ig-do-meta"></span></div>
+      <div class="ig-moves" id="ig-do-body"><div class="empty">Loading</div></div>
+      <button type="button" class="btn ghost show-all" id="ig-do-all" hidden></button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Followers won by feed posts</h2><span class="hint" id="ig-months-meta"></span></div>
+      <div class="ig-two">
+        <div><div class="hsub first">By the month posted</div><div id="ig-months"></div></div>
+        <div>
+          <div class="hsub first">By kind of post <span class="hint">followers a typical post wins</span></div><div id="ig-cells"></div>
+          <div class="hsub">If the mix changed <span class="hint">followers a month</span></div><div id="ig-scen"></div>
+        </div>
+      </div>
+      <p class="hint comp-note" id="ig-months-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Reels</h2><span class="hint" id="ig-reels-meta"></span>
+        <div class="chips" id="ig-reel-view"><button type="button" class="chip-btn active" data-view="latest">Latest</button><button type="button" class="chip-btn" data-view="biggest">Biggest</button></div></div>
+      <div class="ig-reels" id="ig-reels"></div>
+      <p class="hint comp-note" id="ig-reels-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Carousels worth re-cutting as reels</h2><span class="hint">they won followers as posts and no matching reel was found</span></div>
+      <div class="ig-two" id="ig-cands"></div>
+    </div>
+
+    <details class="card fold" id="ig-posts-fold">
+      <summary><h2>Every feed post</h2><span class="hint" id="ig-posts-meta"></span></summary>
+      <p class="hint" id="ig-posts-note"></p>
+      <div class="table-wrap">
+        <table class="data" id="ig-posts">
+          <thead><tr>
+            <th data-key="per_1k" class="num" title="Net follows per 1,000 accounts reached. Not rated below 2,000 reach.">Follows /1k</th>
+            <th data-key="follows" class="num">Follows</th>
+            <th data-key="reach" class="num">Reach</th>
+            <th data-key="shares_per_1k" class="num">Shares /1k</th>
+            <th data-key="cards" class="num">Cards</th>
+            <th data-key="date">Date</th>
+            <th data-key="opening">Opening</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="table-more" id="ig-posts-more"></p>
+    </details>
+    <details class="card fold">
+      <summary><h2>The reach trap</h2><span class="hint">the ten biggest-reach posts and the followers they actually won</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="ig-trap">
+          <thead><tr><th class="num">Reach</th><th class="num">Follows</th><th class="num">Follows /1k</th><th class="num">Cards</th><th>Date</th><th>Opening</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+    <details class="card fold" id="ig-skip-fold">
+      <summary><h2>Reels: skip rate against reach</h2><span class="hint" id="ig-skip-meta"></span></summary>
+      <div class="chart" id="ig-skip"></div>
+    </details>
+  </section>
+
+  <!-- Intelligence -->
+  <section class="panel" id="tab-intel" role="tabpanel" aria-labelledby="tabbtn-intel">
+    <!-- 1. The mistakes, video by video: where viewers left, what the script said there, and the fix. -->
+    <div class="card lead" id="mistakes-card">
+      <div class="card-head"><h2>Your mistakes, video by video</h2><span class="hint" id="mistakes-meta"></span>
+        <div class="chips" id="mistakes-format" role="group" aria-label="Format">
+          <button type="button" class="chip-btn active" data-f="long" aria-pressed="true">Long-form</button>
+          <button type="button" class="chip-btn" data-f="short" aria-pressed="false">Shorts</button>
+        </div>
+      </div>
+      <div class="recurring" id="mistakes-recurring"></div>
+      <label class="pick"><span>Video</span><select id="mistakes-select" aria-label="Choose a video"></select></label>
+    </div>
+    <div class="card" id="intel-detail">
+      <div class="empty">Choose a video above to see its mistakes, retention curve and script.</div>
+    </div>
+
+    <!-- 2. The playbook: what the script readings add up to, per format. -->
+    <div class="card lead" id="playbook-card">
+      <div class="card-head"><h2>What the scripts taught</h2><span class="hint" id="playbook-meta"></span>
+        <div class="chips" id="playbook-format" role="group" aria-label="Format">
+          <button type="button" class="chip-btn active" data-f="long" aria-pressed="true">Long-form</button>
+          <button type="button" class="chip-btn" data-f="short" aria-pressed="false">Shorts</button>
+        </div>
+      </div>
+      <div class="playbook" id="playbook-body"><div class="empty">Loading the script readings</div></div>
+    </div>
+
+    <!-- 2. The newest uploads against the channel's own median. Click one for its curve and script. -->
+    <div class="grid two">
+      <div class="card">
+        <div class="card-head"><h2>Long-form</h2><span class="hint" id="intel-long-count"></span></div>
+        <div class="table-wrap">
+          <table class="data intel-table" id="intel-long" data-kind="long">
+            <thead><tr>
+              <th data-key="title">Title</th>
+              <th data-key="published_at">Published</th>
+              <th data-key="views" class="num">Views</th>
+              <th data-key="ret_avg" class="num" title="Average share of the video still being watched, across the retention curve">Avg ret.</th>
+              <th data-key="vs_median" class="num" title="This video's average retention against the median of every own video of the same format">vs median</th>
+              <th data-key="failed" class="num" title="How many of the channel's own validation checks this video failed">Failed</th>
+              <th data-key="verdict">Verdict</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn ghost show-all" id="intel-long-all" hidden></button>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Shorts</h2><span class="hint" id="intel-short-count"></span></div>
+        <div class="table-wrap">
+          <table class="data intel-table" id="intel-short" data-kind="short">
+            <thead><tr>
+              <th data-key="title">Title</th>
+              <th data-key="published_at">Published</th>
+              <th data-key="views" class="num">Views</th>
+              <th data-key="ret_avg" class="num" title="Average share of the video still being watched, across the retention curve">Avg ret.</th>
+              <th data-key="vs_median" class="num" title="This video's average retention against the median of every own video of the same format">vs median</th>
+              <th data-key="failed" class="num" title="How many of the channel's own validation checks this video failed">Failed</th>
+              <th data-key="tags_str">Species</th>
+              <th data-key="verdict">Verdict</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn ghost show-all" id="intel-short-all" hidden></button>
+      </div>
+    </div>
+
+    <!-- 3. The record, folded. -->
+    <details class="card fold" id="verdicts-card">
+      <summary><h2>Every script reading</h2><span class="hint" id="verdicts-meta">Claude's reading of each script at its retention drops; quotes and numbers are checked against the script and the autopsy</span></summary>
+      <div class="chips" id="verdicts-filter" role="group" aria-label="Filter verdicts">
+        <button type="button" class="chip-btn active" data-v="all" aria-pressed="true">All</button>
+        <button type="button" class="chip-btn" data-v="long" aria-pressed="false">Long-form</button>
+        <button type="button" class="chip-btn" data-v="short" aria-pressed="false">Shorts</button>
+        <button type="button" class="chip-btn" data-v="worked" aria-pressed="false">Worked</button>
+        <button type="button" class="chip-btn" data-v="failed" aria-pressed="false">Failed</button>
+      </div>
+      <div id="verdicts-body"><div class="empty">No verdicts yet. They appear once the script readers have written data/research/verdicts/ and a refresh imports them.</div></div>
+    </details>
+    <details class="card fold">
+      <summary><h2>Scripts on disk</h2><span class="hint" id="intel-pipeline-count">unpublished shorts scripts and long-form drafts on disk</span></summary>
+      <div class="table-wrap">
+        <table class="data" id="intel-pipeline">
+            <thead><tr><th>Kind</th><th>Name</th><th>Status</th><th>Path</th></tr></thead>
+            <tbody></tbody>
+          </table>
+      </div>
+    </details>
+    <details class="card fold">
+      <summary><h2>Raw signals</h2><span class="hint" id="intel-news-meta">news, releases, Wikipedia spikes and dates the brief was written from</span></summary>
+      <div id="intel-news"><div class="empty">No trends run yet. Run npm run trends.</div></div>
+    </details>
+  </section>
+  <!-- Search -->
+  <section class="panel" id="tab-search" role="tabpanel" aria-labelledby="tabbtn-search">
+    <form class="searchbox" id="search-form" role="search">
+      <label for="search-q" class="sr-only">Search</label>
+      <input type="search" id="search-q" placeholder="Search comments, transcripts, scripts, captions, news" autocomplete="off">
+      <button type="submit" class="btn">Search</button>
+    </form>
+    <div class="chips" id="search-kinds" role="group" aria-label="Filter by source">
+      <button type="button" class="chip-btn active" data-kind="" aria-pressed="true">All</button>
+      <button type="button" class="chip-btn" data-kind="comments" aria-pressed="false">Comments</button>
+      <button type="button" class="chip-btn" data-kind="transcripts" aria-pressed="false">Transcripts</button>
+      <button type="button" class="chip-btn" data-kind="scripts" aria-pressed="false">Scripts</button>
+      <button type="button" class="chip-btn" data-kind="instagram" aria-pressed="false">Instagram captions</button>
+      <button type="button" class="chip-btn" data-kind="news" aria-pressed="false">News</button>
+    </div>
+    <div class="card search-empty" id="search-empty">
+      <p><b>Find where something was said.</b> It looks through viewer comments, video transcripts, your scripts, Instagram captions and news headlines. Hindi and English both work.</p>
+      <div class="chips" id="search-examples"><span class="hint">Try</span><button type="button" class="chip-btn" data-q="Shivaji">Shivaji</button><button type="button" class="chip-btn" data-q="Aurangzeb">Aurangzeb</button><button type="button" class="chip-btn" data-q="रामायण">रामायण</button><button type="button" class="chip-btn" data-q="Goa inquisition">Goa inquisition</button></div>
+    </div>
+    <p class="hint" id="search-meta" aria-live="polite"></p>
+    <ol class="results" id="search-results"></ol>
+  </section>
+</main>
+
+<script>window.ITIHA_STATIC = {"at":"2026-11-16T01:32:36.052Z","hide":["ideas","competitors"]};</script>
+<script src="app.js"></script>
+</body>
+</html>
